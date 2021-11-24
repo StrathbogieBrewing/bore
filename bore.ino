@@ -19,6 +19,8 @@
 
 #include <Wire.h>
 
+#include "TinBus.h"
+
 #define PIN_VBAT (A0)
 #define PIN_IBAT (A1)
 
@@ -32,23 +34,73 @@
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+
   pinMode(PIN_PUMP, OUTPUT);
   pinMode(PIN_VALVE_1, OUTPUT);
   pinMode(PIN_VALVE_2, OUTPUT);
   pinMode(PIN_VALVE_3, OUTPUT);
 
   Wire.begin();
+
+  tinbusBegin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  delay(500);
-  uint16_t vbat_mv = ((uint16_t)analogRead(PIN_VBAT) * 111) >> 2;
-  Serial.println(vbat_mv);
-  digitalWrite(PIN_PUMP, LOW);
-  delay(500);
-  digitalWrite(PIN_PUMP, HIGH);
+  static unsigned long minutes = 0;
+  static uint8_t lowBatteryTimer = 0;
 
+  // delay(1000);
+  // int16_t rxData = tinbusRead();
+  // if(rxData >= 0){
+  //   Serial.println(rxData, HEX);
+  // }
+
+  delay(1000);
+  uint16_t vbat_mv = ((uint16_t)analogRead(PIN_VBAT) * 111) >> 2;
+  Serial.print("vbat ");
+  Serial.println(vbat_mv);
+
+  if(vbat_mv < 13500){
+    lowBatteryTimer = 64; // disable pump for 1 hour
+    digitalWrite(PIN_PUMP, LOW);
+  }
+
+  delay(1000);
+  unsigned long newMinutes = (millis() >> 16); // dt = 65.536 secs
+  Serial.print("time ");
+  Serial.println(newMinutes);
+
+  // pump control
+  if(newMinutes != minutes){
+    minutes = newMinutes;
+    if(lowBatteryTimer){
+      lowBatteryTimer--;
+    }
+    if(((minutes & 0xC0) == 0) && (lowBatteryTimer == 0)){
+      digitalWrite(PIN_PUMP, HIGH);
+    } else {
+      digitalWrite(PIN_PUMP, LOW);
+    }
+  }
+
+  // valve sequencing, 2 minutes per hour per valve
+  if(((minutes & 0x3E) == 0) && (vbat_mv > 12500)){
+    digitalWrite(PIN_VALVE_1, HIGH);
+  } else {
+    digitalWrite(PIN_VALVE_1, LOW);
+  }
+  if(((minutes & 0x3E) == 20) && (vbat_mv > 12500)){
+    digitalWrite(PIN_VALVE_2, HIGH);
+  } else {
+    digitalWrite(PIN_VALVE_2, LOW);
+  }
+  if(((minutes & 0x3E) == 40) && (vbat_mv > 12500)){
+    digitalWrite(PIN_VALVE_3, HIGH);
+  } else {
+    digitalWrite(PIN_VALVE_3, LOW);
+  }
+
+  delay(1000);
   Wire.beginTransmission(PRES_I2C_ADDR);
   Wire.endTransmission();
   uint8_t config = 0x8F; // config for gain of 8,
@@ -60,5 +112,13 @@ void loop() {
   pressure |= Wire.read();
   pressure *= 19;
   pressure /= 4;
+  Serial.print("pres ");
   Serial.println(pressure);
 }
+
+
+  // delay(500);
+  // digitalWrite(PIN_PUMP, HIGH);
+  // digitalWrite(PIN_VALVE_1, HIGH);
+  // digitalWrite(PIN_VALVE_2, HIGH);
+  // digitalWrite(PIN_VALVE_3, HIGH);
