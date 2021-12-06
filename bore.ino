@@ -19,7 +19,7 @@
 
 #include <Wire.h>
 
-#include "TinBus.h"
+// #include "TinBus.h"
 
 #define PIN_VBAT (A0)
 #define PIN_IBAT (A1)
@@ -42,12 +42,13 @@ void setup() {
 
   Wire.begin();
 
-  tinbusBegin();
+  // tinbusBegin();
 }
 
 void loop() {
   static unsigned long minutes = 0;
-  static uint8_t lowBatteryTimer = 0;
+  // static uint8_t lowBatteryTimer = 240; // disable pump for 4 hours
+  static int16_t head_cm = 0;
 
   // delay(1000);
   // int16_t rxData = tinbusRead();
@@ -60,8 +61,9 @@ void loop() {
   Serial.print("vbat ");
   Serial.println(vbat_mv);
 
-  if(vbat_mv < 13500){
-    lowBatteryTimer = 64; // disable pump for 1 hour
+  if (vbat_mv < 13200) {
+    // lowBatteryTimer = 220; // disable pump for 4 hours
+    minutes = 0; // reset timer
     digitalWrite(PIN_PUMP, LOW);
   }
 
@@ -71,30 +73,38 @@ void loop() {
   Serial.println(newMinutes);
 
   // pump control
-  if(newMinutes != minutes){
+  if (newMinutes != minutes) {
     minutes = newMinutes;
-    if(lowBatteryTimer){
-      lowBatteryTimer--;
-    }
-    if(((minutes & 0xC0) == 0) && (lowBatteryTimer == 0)){
-      digitalWrite(PIN_PUMP, HIGH);
+    // if(lowBatteryTimer){
+    //   lowBatteryTimer--;
+    // }
+    if ((minutes > 0xC0) && (minutes < 0x1C0)) {
+      if ((head_cm < 550) && ((minutes & 0x30) != 0x30)) {
+        digitalWrite(PIN_PUMP, HIGH);
+      }
     } else {
       digitalWrite(PIN_PUMP, LOW);
     }
+
+    // if(((minutes & 0xC0) == 0x80) && (lowBatteryTimer == 0)){
+    //   digitalWrite(PIN_PUMP, HIGH);
+    // } else {
+    //   digitalWrite(PIN_PUMP, LOW);
+    // }
   }
 
   // valve sequencing, 2 minutes per hour per valve
-  if(((minutes & 0x3E) == 0) && (vbat_mv > 12500)){
+  if (((minutes & 0x3E) == 0x32) && (vbat_mv > 12800)) {
     digitalWrite(PIN_VALVE_1, HIGH);
   } else {
     digitalWrite(PIN_VALVE_1, LOW);
   }
-  if(((minutes & 0x3E) == 20) && (vbat_mv > 12500)){
+  if (((minutes & 0x3E) == 0x34) && (vbat_mv > 12800)) {
     digitalWrite(PIN_VALVE_2, HIGH);
   } else {
     digitalWrite(PIN_VALVE_2, LOW);
   }
-  if(((minutes & 0x3E) == 40) && (vbat_mv > 12500)){
+  if (((minutes & 0x3E) == 0x36) && (vbat_mv > 12800)) {
     digitalWrite(PIN_VALVE_3, HIGH);
   } else {
     digitalWrite(PIN_VALVE_3, LOW);
@@ -112,13 +122,13 @@ void loop() {
   pressure |= Wire.read();
   pressure *= 19;
   pressure /= 4;
-  Serial.print("pres ");
-  Serial.println(pressure);
+  head_cm = pressure / 100;
+  Serial.print("head ");
+  Serial.println(head_cm);
 }
 
-
-  // delay(500);
-  // digitalWrite(PIN_PUMP, HIGH);
-  // digitalWrite(PIN_VALVE_1, HIGH);
-  // digitalWrite(PIN_VALVE_2, HIGH);
-  // digitalWrite(PIN_VALVE_3, HIGH);
+// delay(500);
+// digitalWrite(PIN_PUMP, HIGH);
+// digitalWrite(PIN_VALVE_1, HIGH);
+// digitalWrite(PIN_VALVE_2, HIGH);
+// digitalWrite(PIN_VALVE_3, HIGH);
