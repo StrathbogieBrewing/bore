@@ -47,8 +47,9 @@ void setup() {
 
 void loop() {
   static unsigned long minutes = 0;
-  // static uint8_t lowBatteryTimer = 240; // disable pump for 4 hours
   static int16_t head_cm = 0;
+
+  static uint32_t vbat_filter = 0;
 
   // delay(1000);
   // int16_t rxData = tinbusRead();
@@ -57,12 +58,22 @@ void loop() {
   // }
 
   delay(1000);
-  uint16_t vbat_mv = ((uint16_t)analogRead(PIN_VBAT) * 111) >> 2;
+  // uint16_t vbat_mv = ((uint16_t)analogRead(PIN_VBAT) * 111) >> 2;
+
+  uint32_t vbat_raw = analogRead(PIN_VBAT);
+  if (vbat_filter == 0) {
+    vbat_filter = vbat_raw << 8L;
+  }
+
+  vbat_filter -= vbat_filter >> 8L;
+  vbat_filter += vbat_raw;
+
+  uint32_t vbat_mv = ((vbat_filter >> 8L) * 7104L) >> 8;
+
   Serial.print("vbat ");
   Serial.println(vbat_mv);
 
-  if (vbat_mv < 13200) {
-    // lowBatteryTimer = 220; // disable pump for 4 hours
+  if (vbat_mv < 13400) {
     minutes = 0; // reset timer
     digitalWrite(PIN_PUMP, LOW);
   }
@@ -75,10 +86,8 @@ void loop() {
   // pump control
   if (newMinutes != minutes) {
     minutes = newMinutes;
-    // if(lowBatteryTimer){
-    //   lowBatteryTimer--;
-    // }
-    if ((minutes > 0xC0) && (minutes < 0x1C0)) {
+
+    if ((minutes > 0x00C0) && (minutes < 0x01C0)) {
       if ((head_cm < 550) && ((minutes & 0x30) != 0x30)) {
         digitalWrite(PIN_PUMP, HIGH);
       }
