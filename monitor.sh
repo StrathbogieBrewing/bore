@@ -2,4 +2,4 @@
 
 set -e
 
-socat /dev/ttyUSB0,b9600 -
+socat /dev/ttyUSB1,b9600 -
