@@ -25,9 +25,9 @@
 #define PIN_IBAT (A1)
 
 #define PIN_PUMP (8)
-#define PIN_VALVE_1 (9)
-#define PIN_VALVE_2 (4)
-#define PIN_VALVE_3 (5)
+#define PIN_VALVE_PATIO (9)
+#define PIN_VALVE_HOTHOUSE (4)
+#define PIN_VALVE_CAGE (5)
 
 #define PRES_I2C_ADDR ((uint8_t)72)
 
@@ -36,9 +36,9 @@ void setup() {
   Serial.begin(9600);
 
   pinMode(PIN_PUMP, OUTPUT);
-  pinMode(PIN_VALVE_1, OUTPUT);
-  pinMode(PIN_VALVE_2, OUTPUT);
-  pinMode(PIN_VALVE_3, OUTPUT);
+  pinMode(PIN_VALVE_PATIO, OUTPUT);
+  pinMode(PIN_VALVE_HOTHOUSE, OUTPUT);
+  pinMode(PIN_VALVE_CAGE, OUTPUT);
 
   Wire.begin();
 
@@ -87,8 +87,10 @@ void loop() {
   if (newMinutes != minutes) {
     minutes = newMinutes;
 
-    if ((minutes > 0x00C0) && (minutes < 0x01C0)) {
-      if ((head_cm < 550) && ((minutes & 0x30) != 0x30)) {
+    uint8_t time_slot = minutes % 120;
+
+    if ((minutes >= 120) && (minutes < 480)) {
+      if ((head_cm < 550) && (time_slot == 0)) {
         digitalWrite(PIN_PUMP, HIGH);
       }
     } else {
@@ -100,44 +102,45 @@ void loop() {
     // } else {
     //   digitalWrite(PIN_PUMP, LOW);
     // }
+    // }
+
+    // valve sequencing, 2 minutes per 2 hours per valve
+    if ((time_slot == 2) || (time_slot == 3)) {
+      digitalWrite(PIN_VALVE_PATIO, HIGH);
+    } else {
+      digitalWrite(PIN_VALVE_PATIO, LOW);
+    }
+    if ((time_slot == 4) || (time_slot == 5)) {
+      digitalWrite(PIN_VALVE_HOTHOUSE, HIGH);
+    } else {
+      digitalWrite(PIN_VALVE_HOTHOUSE, LOW);
+    }
+    if ((time_slot >= 6) || (time_slot < 12)) {
+      digitalWrite(PIN_VALVE_CAGE, HIGH);
+    } else {
+      digitalWrite(PIN_VALVE_CAGE, LOW);
+    }
   }
 
-  // valve sequencing, 2 minutes per hour per valve
-  if (((minutes & 0x3E) == 0x32) && (vbat_mv > 12800)) {
-    digitalWrite(PIN_VALVE_1, HIGH);
-  } else {
-    digitalWrite(PIN_VALVE_1, LOW);
-  }
-  if (((minutes & 0x3E) == 0x34) && (vbat_mv > 12800)) {
-    digitalWrite(PIN_VALVE_2, HIGH);
-  } else {
-    digitalWrite(PIN_VALVE_2, LOW);
-  }
-  if (((minutes & 0x3E) == 0x36) && (vbat_mv > 12800)) {
-    digitalWrite(PIN_VALVE_3, HIGH);
-  } else {
-    digitalWrite(PIN_VALVE_3, LOW);
+    delay(1000);
+    Wire.beginTransmission(PRES_I2C_ADDR);
+    Wire.endTransmission();
+    uint8_t config = 0x8F; // config for gain of 8,
+    Wire.beginTransmission(PRES_I2C_ADDR);
+    Wire.write(config);
+    Wire.endTransmission();
+    Wire.requestFrom(PRES_I2C_ADDR, (uint8_t)2);
+    int16_t pressure = Wire.read() << 8;
+    pressure |= Wire.read();
+    pressure *= 19;
+    pressure /= 4;
+    head_cm = pressure / 100;
+    Serial.print("head ");
+    Serial.println(head_cm);
   }
 
-  delay(1000);
-  Wire.beginTransmission(PRES_I2C_ADDR);
-  Wire.endTransmission();
-  uint8_t config = 0x8F; // config for gain of 8,
-  Wire.beginTransmission(PRES_I2C_ADDR);
-  Wire.write(config);
-  Wire.endTransmission();
-  Wire.requestFrom(PRES_I2C_ADDR, (uint8_t)2);
-  int16_t pressure = Wire.read() << 8;
-  pressure |= Wire.read();
-  pressure *= 19;
-  pressure /= 4;
-  head_cm = pressure / 100;
-  Serial.print("head ");
-  Serial.println(head_cm);
-}
-
-// delay(500);
-// digitalWrite(PIN_PUMP, HIGH);
-// digitalWrite(PIN_VALVE_1, HIGH);
-// digitalWrite(PIN_VALVE_2, HIGH);
-// digitalWrite(PIN_VALVE_3, HIGH);
+  // delay(500);
+  // digitalWrite(PIN_PUMP, HIGH);
+  // digitalWrite(PIN_VALVE_PATIO, HIGH);
+  // digitalWrite(PIN_VALVE_HOTHOUSE, HIGH);
+  // digitalWrite(PIN_VALVE_CAGE, HIGH);
